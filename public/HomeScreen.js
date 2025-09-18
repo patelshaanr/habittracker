@@ -1,117 +1,118 @@
-// screens/HomeScreen.js
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, Button, StyleSheet, TouchableOpacity } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// screens/AddHabitScreen.js
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Keyboard,
+  SafeAreaView,
+} from 'react-native';
 
-const HABITS_KEY = 'habits';
-const COMPLETED_KEY = 'completedHabits';
+export default function AddHabitScreen({ navigation, route }) {
+  const [habit, setHabit] = useState('');
+  const { setHabits } = route.params;
 
-export default function HomeScreen({ navigation }) {
-  const [habits, setHabits] = useState([]);             // array of strings (habit names)
-  const [completedHabits, setCompletedHabits] = useState([]); // array of strings currently completed
+  // simple inline validation: non-empty & at least 2 visible chars
+  const trimmed = useMemo(() => habit.trim(), [habit]);
+  const isValid = trimmed.length >= 2;
+  const errorMsg = !trimmed
+    ? 'Please enter a habit name.'
+    : trimmed.length < 2
+    ? 'Habit name is too short.'
+    : '';
 
-  // Load saved data on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        const [savedHabits, savedCompleted] = await Promise.all([
-          AsyncStorage.getItem(HABITS_KEY),
-          AsyncStorage.getItem(COMPLETED_KEY),
-        ]);
-        if (savedHabits) setHabits(JSON.parse(savedHabits));
-        if (savedCompleted) setCompletedHabits(JSON.parse(savedCompleted));
-      } catch (e) {
-        console.warn('Failed to load habits:', e);
-      }
-    })();
-  }, []);
-
-  // Persist helpers
-  const saveHabits = useCallback(async (next) => {
-    setHabits(next);
-    try { await AsyncStorage.setItem(HABITS_KEY, JSON.stringify(next)); } catch {}
-  }, []);
-
-  const saveCompleted = useCallback(async (next) => {
-    setCompletedHabits(next);
-    try { await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(next)); } catch {}
-  }, []);
-
-  // Compatibility wrapper so AddHabitScreen’s `setHabits((prev)=>...)` still works
-  const setHabitsCompat = useCallback((updaterOrValue) => {
-    setHabits(prev => {
-      const next = typeof updaterOrValue === 'function' ? updaterOrValue(prev) : updaterOrValue;
-      // persist
-      AsyncStorage.setItem(HABITS_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
-  }, []);
-
-  // Toggle complete for a habit (by name)
-  const toggleCompletion = (name) => {
-    const isDone = completedHabits.includes(name);
-    const next = isDone
-      ? completedHabits.filter(h => h !== name)
-      : [...completedHabits, name];
-    saveCompleted(next);
-  };
-
-  // Optional: long-press to delete a habit
-  const deleteHabit = (name) => {
-    const nextHabits = habits.filter(h => h !== name);
-    const nextCompleted = completedHabits.filter(h => h !== name);
-    saveHabits(nextHabits);
-    saveCompleted(nextCompleted);
-  };
-
-  const renderItem = ({ item }) => {
-    const done = completedHabits.includes(item);
-    return (
-      <TouchableOpacity
-        style={[styles.habitItem, done && styles.completedHabit]}
-        onPress={() => toggleCompletion(item)}
-        onLongPress={() => deleteHabit(item)}
-      >
-        <Text style={[styles.habitText, done && styles.habitTextCompleted]}>
-          {item}
-        </Text>
-        <Text style={styles.hint}>{done ? 'Completed (tap to undo)' : 'Tap to complete • long-press to delete'}</Text>
-      </TouchableOpacity>
-    );
+  const addHabit = () => {
+    if (!isValid) return; // guard; button is disabled anyway
+    setHabits((prevHabits) => [...prevHabits, trimmed]);
+    Keyboard.dismiss();
+    navigation.goBack();
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Your Habits</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+      <View style={styles.container}>
+        <Text style={styles.title}>Add a New Habit</Text>
 
-      <FlatList
-        data={habits}
-        keyExtractor={(item, index) => `${item}-${index}`}
-        renderItem={renderItem}
-        ListEmptyComponent={<Text style={styles.empty}>No habits yet — add one.</Text>}
-        contentContainerStyle={habits.length ? undefined : { flexGrow: 1, justifyContent: 'center' }}
-      />
+        <View style={styles.card}>
+          <Text style={styles.label}>Habit name</Text>
+          <TextInput
+            style={[
+              styles.input,
+              !isValid && trimmed.length >= 0 && styles.inputError,
+            ]}
+            placeholder="e.g., Drink 2L of water"
+            value={habit}
+            onChangeText={setHabit}
+            returnKeyType="done"
+            onSubmitEditing={addHabit}
+            autoFocus
+          />
+          {!isValid && (
+            <Text style={styles.helperText}>{errorMsg}</Text>
+          )}
+        </View>
 
-      <Button
-        title="Add New Habit"
-        onPress={() => navigation.navigate('AddHabit', { setHabits: setHabitsCompat })}
-      />
-    </View>
+        <TouchableOpacity
+          style={[styles.saveButton, !isValid && styles.saveButtonDisabled]}
+          activeOpacity={isValid ? 0.85 : 1}
+          onPress={addHabit}
+          disabled={!isValid}
+        >
+          <Text style={styles.saveButtonText}>Save Habit</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
-  habitItem: {
-    padding: 15,
-    backgroundColor: '#f0f0f0',
-    marginVertical: 8,
-    borderRadius: 8,
+  title: { fontSize: 28, fontWeight: '800', marginBottom: 16, color: '#0F172A' },
+
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+    marginBottom: 20,
   },
-  completedHabit: { backgroundColor: '#e6ffe6' },
-  habitText: { fontSize: 16 },
-  habitTextCompleted: { textDecorationLine: 'line-through', color: '#16a34a', fontWeight: '600' },
-  hint: { marginTop: 6, fontSize: 12, color: '#6b7280' },
-  empty: { textAlign: 'center', color: '#6b7280' },
+  label: { fontSize: 14, color: '#64748B', marginBottom: 8 },
+  input: {
+    fontSize: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: '#CBD5E1',
+  },
+  inputError: {
+    borderBottomColor: '#EF4444',
+  },
+  helperText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#EF4444',
+  },
+
+  saveButton: {
+    backgroundColor: '#16A34A',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 'auto',
+    shadowColor: '#16A34A',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#86EFAC',
+  },
+  saveButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
 });
